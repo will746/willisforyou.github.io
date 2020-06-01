@@ -79,13 +79,15 @@
 
 
 
+<meta name="description" content="#保存图片到相册 ###扫描文件通知相册更新  方式1 一般操作 Intent intent &#x3D; new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE); Uri uri &#x3D; Uri.fromFile(file); intent.setData(uri); context.sendBroadcast(intent);   - 方式1 错误操作  Medi">
 <meta property="og:type" content="article">
-<meta property="og:title" content="Test">
-<meta property="og:url" content="http://yoursite.com/2020/05/28/Test/index.html">
+<meta property="og:title" content="保存图片到相册">
+<meta property="og:url" content="http://yoursite.com/2020/06/01/%E4%BF%9D%E5%AD%98%E5%9B%BE%E7%89%87%E5%88%B0%E7%9B%B8%E5%86%8C/index.html">
 <meta property="og:site_name" content="Hexo">
+<meta property="og:description" content="#保存图片到相册 ###扫描文件通知相册更新  方式1 一般操作 Intent intent &#x3D; new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE); Uri uri &#x3D; Uri.fromFile(file); intent.setData(uri); context.sendBroadcast(intent);   - 方式1 错误操作  Medi">
 <meta property="og:locale" content="en_US">
-<meta property="article:published_time" content="2020-05-28T10:19:27.000Z">
-<meta property="article:modified_time" content="2020-05-28T10:19:27.237Z">
+<meta property="article:published_time" content="2020-06-01T09:06:37.741Z">
+<meta property="article:modified_time" content="2020-06-01T09:21:00.581Z">
 <meta property="article:author" content="John Doe">
 <meta name="twitter:card" content="summary">
 
@@ -117,13 +119,13 @@
 
 
 
-  <link rel="canonical" href="http://yoursite.com/2020/05/28/Test/"/>
+  <link rel="canonical" href="http://yoursite.com/2020/06/01/保存图片到相册/"/>
 
 
 
 
 
-  <title>Test | Hexo</title>
+  <title>保存图片到相册 | Hexo</title>
   
 
 
@@ -230,7 +232,7 @@
   
   
   <div class="post-block">
-    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2020/05/28/Test/">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2020/06/01/%E4%BF%9D%E5%AD%98%E5%9B%BE%E7%89%87%E5%88%B0%E7%9B%B8%E5%86%8C/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="name" content="John Doe">
@@ -247,7 +249,7 @@
 
         
         
-          <h1 class="post-title" itemprop="name headline">Test</h1>
+          <h1 class="post-title" itemprop="name headline">保存图片到相册</h1>
         
 
         <div class="post-meta">
@@ -259,8 +261,8 @@
               
                 <span class="post-meta-item-text">Posted on</span>
               
-              <time title="Post created" itemprop="dateCreated datePublished" datetime="2020-05-28T18:19:27+08:00">
-                2020-05-28
+              <time title="Post created" itemprop="dateCreated datePublished" datetime="2020-06-01T17:06:37+08:00">
+                2020-06-01
               </time>
             
 
@@ -297,7 +299,117 @@
       
 
       
-        
+        <p>#保存图片到相册</p>
+<p>###扫描文件通知相册更新</p>
+<ul>
+<li><p>方式1 一般操作</p>
+<pre><code>Intent intent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
+Uri uri = Uri.fromFile(file);
+intent.setData(uri);
+context.sendBroadcast(intent);</code></pre></li>
+</ul>
+<br>
+- 方式1 错误操作
+
+<pre><code>MediaStore.Images.Media.insertImage(context.getContentResolver(), file.getAbsolutePath(), &quot;name&quot;, &quot;description&quot;);
+Intent intent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
+Uri uri = Uri.fromFile(file);
+intent.setData(uri);
+context.sendBroadcast(intent);</code></pre><br>
+<br>
+
+<blockquote>
+<p>因为在使用ACTION_MEDIA_SCANNER_SCAN_FILE方式通知相册更新时，也需要执行类似insertImage方法内部的某些操作，可能和ContentProvider相关的数据库有关，所以如果你先执行了insertImage方法，那么它在接收到这个ACTION_MEDIA_SCANNER_SCAN_FILE广播的时候，做了如下判断：如果已经执行了insertImage方法，那么return;，所以不会执行再通知相册更新了。</p>
+</blockquote>
+<br>
+###完整操作
+
+<ul>
+<li><p>方式1</p>
+<pre><code>// 插入file数据到相册
+ContentValues values = new ContentValues(9);
+values.put(MediaStore.Images.Media.TITLE, &quot;Camera&quot;);
+values.put(MediaStore.Images.Media.DISPLAY_NAME, filename);
+values.put(MediaStore.Images.Media.DATE_TAKEN, System.currentTimeMillis());
+values.put(MediaStore.Images.Media.MIME_TYPE, &quot;image/jpeg&quot;);
+values.put(MediaStore.Images.Media.ORIENTATION, 0);
+values.put(MediaStore.Images.Media.DATA, file.getAbsolutePath());
+values.put(MediaStore.Images.Media.SIZE, file.length());
+Uri uri = context.getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+// 通知相册更新
+context.sendBroadcast(new Intent(&quot;com.android.camera.NEW_PICTURE&quot;, uri));</code></pre></li>
+<li><p>方式2-简单操作</p>
+<pre><code>// 插入file数据到相册
+ContentValues values = new ContentValues();
+values.put(MediaStore.Images.Media.DATA, file.getAbsolutePath());
+values.put(MediaStore.Images.Media.MIME_TYPE, &quot;image/jpeg&quot;);
+Uri uri = context.getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+// 通知相册更新
+context.sendBroadcast(new Intent(&quot;com.android.camera.NEW_PICTURE&quot;, uri));</code></pre><br>
+
+</li>
+</ul>
+<br>
+##总结
+
+<p>###源码逻辑如下：</p>
+<pre><code>/**
+ * Insert an image and create a thumbnail for it.
+ *
+ * @param cr The content resolver to use
+ * @param source The stream to use for the image
+ * @param title The name of the image
+ * @param description The description of the image
+ * @return The URL to the newly created image, or &lt;code&gt;null&lt;/code&gt; if the image failed to be stored
+ *              for any reason.
+ */
+public static final String insertImage(ContentResolver cr, Bitmap source,
+                                       String title, String description) {
+    ContentValues values = new ContentValues();
+    values.put(Images.Media.TITLE, title);
+    values.put(Images.Media.DESCRIPTION, description);
+    values.put(Images.Media.MIME_TYPE, &quot;image/jpeg&quot;);
+
+Uri url = null;
+String stringUrl = null;    /* value to be returned */
+
+try {
+    url = cr.insert(EXTERNAL_CONTENT_URI, values);
+
+    if (source != null) {
+        OutputStream imageOut = cr.openOutputStream(url);
+        try {
+            source.compress(Bitmap.CompressFormat.JPEG, 50, imageOut);
+        } finally {
+            imageOut.close();
+        }
+
+        long id = ContentUris.parseId(url);
+        // Wait until MINI_KIND thumbnail is generated.
+        Bitmap miniThumb = Images.Thumbnails.getThumbnail(cr, id,
+                Images.Thumbnails.MINI_KIND, null);
+        // This is for backward compatibility.
+        Bitmap microThumb = StoreThumbnail(cr, miniThumb, id, 50F, 50F,
+                Images.Thumbnails.MICRO_KIND);
+    } else {
+        Log.e(TAG, &quot;Failed to create thumbnail, removing original&quot;);
+        cr.delete(url, null, null);
+        url = null;
+    }
+} catch (Exception e) {
+    Log.e(TAG, &quot;Failed to insert image&quot;, e);
+    if (url != null) {
+        cr.delete(url, null, null);
+        url = null;
+    }
+}
+
+if (url != null) {
+    stringUrl = url.toString();
+}
+
+return stringUrl;
+}</code></pre>
       
     </div>
     
@@ -321,8 +433,8 @@
         <div class="post-nav">
           <div class="post-nav-next post-nav-item">
             
-              <a href="/2020/05/28/%E6%96%87%E7%AB%A0%E6%A0%87%E9%A2%98/" rel="next" title="文章标题">
-                <i class="fa fa-chevron-left"></i> 文章标题
+              <a href="/2020/06/01/Hexo%20%E6%90%AD%E5%BB%BA%E5%8D%9A%E5%AE%A2/" rel="next" title="Hexo 搭建博客">
+                <i class="fa fa-chevron-left"></i> Hexo 搭建博客
               </a>
             
           </div>
@@ -397,7 +509,7 @@
               
                 <a href="/archives/%20%7C%7C%20archive">
               
-                  <span class="site-state-item-count">3</span>
+                  <span class="site-state-item-count">2</span>
                   <span class="site-state-item-name">posts</span>
                 </a>
               </div>

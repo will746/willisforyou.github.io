@@ -229,7 +229,7 @@
   
   
   <div class="post-block">
-    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2020/05/28/Test/">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2020/06/01/%E4%BF%9D%E5%AD%98%E5%9B%BE%E7%89%87%E5%88%B0%E7%9B%B8%E5%86%8C/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="name" content="John Doe">
@@ -248,7 +248,7 @@
         
           <h1 class="post-title" itemprop="name headline">
                 
-                <a class="post-title-link" href="/2020/05/28/Test/" itemprop="url">Test</a></h1>
+                <a class="post-title-link" href="/2020/06/01/%E4%BF%9D%E5%AD%98%E5%9B%BE%E7%89%87%E5%88%B0%E7%9B%B8%E5%86%8C/" itemprop="url">保存图片到相册</a></h1>
         
 
         <div class="post-meta">
@@ -260,8 +260,8 @@
               
                 <span class="post-meta-item-text">Posted on</span>
               
-              <time title="Post created" itemprop="dateCreated datePublished" datetime="2020-05-28T18:19:27+08:00">
-                2020-05-28
+              <time title="Post created" itemprop="dateCreated datePublished" datetime="2020-06-01T17:06:37+08:00">
+                2020-06-01
               </time>
             
 
@@ -300,7 +300,117 @@
       
         
           
-            
+            <p>#保存图片到相册</p>
+<p>###扫描文件通知相册更新</p>
+<ul>
+<li><p>方式1 一般操作</p>
+<pre><code>Intent intent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
+Uri uri = Uri.fromFile(file);
+intent.setData(uri);
+context.sendBroadcast(intent);</code></pre></li>
+</ul>
+<br>
+- 方式1 错误操作
+
+<pre><code>MediaStore.Images.Media.insertImage(context.getContentResolver(), file.getAbsolutePath(), &quot;name&quot;, &quot;description&quot;);
+Intent intent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
+Uri uri = Uri.fromFile(file);
+intent.setData(uri);
+context.sendBroadcast(intent);</code></pre><br>
+<br>
+
+<blockquote>
+<p>因为在使用ACTION_MEDIA_SCANNER_SCAN_FILE方式通知相册更新时，也需要执行类似insertImage方法内部的某些操作，可能和ContentProvider相关的数据库有关，所以如果你先执行了insertImage方法，那么它在接收到这个ACTION_MEDIA_SCANNER_SCAN_FILE广播的时候，做了如下判断：如果已经执行了insertImage方法，那么return;，所以不会执行再通知相册更新了。</p>
+</blockquote>
+<br>
+###完整操作
+
+<ul>
+<li><p>方式1</p>
+<pre><code>// 插入file数据到相册
+ContentValues values = new ContentValues(9);
+values.put(MediaStore.Images.Media.TITLE, &quot;Camera&quot;);
+values.put(MediaStore.Images.Media.DISPLAY_NAME, filename);
+values.put(MediaStore.Images.Media.DATE_TAKEN, System.currentTimeMillis());
+values.put(MediaStore.Images.Media.MIME_TYPE, &quot;image/jpeg&quot;);
+values.put(MediaStore.Images.Media.ORIENTATION, 0);
+values.put(MediaStore.Images.Media.DATA, file.getAbsolutePath());
+values.put(MediaStore.Images.Media.SIZE, file.length());
+Uri uri = context.getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+// 通知相册更新
+context.sendBroadcast(new Intent(&quot;com.android.camera.NEW_PICTURE&quot;, uri));</code></pre></li>
+<li><p>方式2-简单操作</p>
+<pre><code>// 插入file数据到相册
+ContentValues values = new ContentValues();
+values.put(MediaStore.Images.Media.DATA, file.getAbsolutePath());
+values.put(MediaStore.Images.Media.MIME_TYPE, &quot;image/jpeg&quot;);
+Uri uri = context.getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+// 通知相册更新
+context.sendBroadcast(new Intent(&quot;com.android.camera.NEW_PICTURE&quot;, uri));</code></pre><br>
+
+</li>
+</ul>
+<br>
+##总结
+
+<p>###源码逻辑如下：</p>
+<pre><code>/**
+ * Insert an image and create a thumbnail for it.
+ *
+ * @param cr The content resolver to use
+ * @param source The stream to use for the image
+ * @param title The name of the image
+ * @param description The description of the image
+ * @return The URL to the newly created image, or &lt;code&gt;null&lt;/code&gt; if the image failed to be stored
+ *              for any reason.
+ */
+public static final String insertImage(ContentResolver cr, Bitmap source,
+                                       String title, String description) {
+    ContentValues values = new ContentValues();
+    values.put(Images.Media.TITLE, title);
+    values.put(Images.Media.DESCRIPTION, description);
+    values.put(Images.Media.MIME_TYPE, &quot;image/jpeg&quot;);
+
+Uri url = null;
+String stringUrl = null;    /* value to be returned */
+
+try {
+    url = cr.insert(EXTERNAL_CONTENT_URI, values);
+
+    if (source != null) {
+        OutputStream imageOut = cr.openOutputStream(url);
+        try {
+            source.compress(Bitmap.CompressFormat.JPEG, 50, imageOut);
+        } finally {
+            imageOut.close();
+        }
+
+        long id = ContentUris.parseId(url);
+        // Wait until MINI_KIND thumbnail is generated.
+        Bitmap miniThumb = Images.Thumbnails.getThumbnail(cr, id,
+                Images.Thumbnails.MINI_KIND, null);
+        // This is for backward compatibility.
+        Bitmap microThumb = StoreThumbnail(cr, miniThumb, id, 50F, 50F,
+                Images.Thumbnails.MICRO_KIND);
+    } else {
+        Log.e(TAG, &quot;Failed to create thumbnail, removing original&quot;);
+        cr.delete(url, null, null);
+        url = null;
+    }
+} catch (Exception e) {
+    Log.e(TAG, &quot;Failed to insert image&quot;, e);
+    if (url != null) {
+        cr.delete(url, null, null);
+        url = null;
+    }
+}
+
+if (url != null) {
+    stringUrl = url.toString();
+}
+
+return stringUrl;
+}</code></pre>
           
         
       
@@ -348,7 +458,7 @@
   
   
   <div class="post-block">
-    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2020/05/28/%E6%96%87%E7%AB%A0%E6%A0%87%E9%A2%98/">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2020/06/01/Hexo%20%E6%90%AD%E5%BB%BA%E5%8D%9A%E5%AE%A2/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="name" content="John Doe">
@@ -367,7 +477,7 @@
         
           <h1 class="post-title" itemprop="name headline">
                 
-                <a class="post-title-link" href="/2020/05/28/%E6%96%87%E7%AB%A0%E6%A0%87%E9%A2%98/" itemprop="url">文章标题</a></h1>
+                <a class="post-title-link" href="/2020/06/01/Hexo%20%E6%90%AD%E5%BB%BA%E5%8D%9A%E5%AE%A2/" itemprop="url">Hexo 搭建博客</a></h1>
         
 
         <div class="post-meta">
@@ -379,8 +489,8 @@
               
                 <span class="post-meta-item-text">Posted on</span>
               
-              <time title="Post created" itemprop="dateCreated datePublished" datetime="2020-05-28T18:11:21+08:00">
-                2020-05-28
+              <time title="Post created" itemprop="dateCreated datePublished" datetime="2020-06-01T17:00:38+08:00">
+                2020-06-01
               </time>
             
 
@@ -419,139 +529,7 @@
       
         
           
-            
-          
-        
-      
-    </div>
-    
-    
-    
-
-    
-
-    
-
-    
-
-    <footer class="post-footer">
-      
-
-      
-
-      
-
-      
-      
-        <div class="post-eof"></div>
-      
-    </footer>
-  </div>
-  
-  
-  
-  </article>
-
-
-    
-      
-
-  
-
-  
-  
-  
-
-  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
-  
-  
-  
-  <div class="post-block">
-    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2020/05/27/hello-world/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="name" content="John Doe">
-      <meta itemprop="description" content="">
-      <meta itemprop="image" content="/images/avatar.gif">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Hexo">
-    </span>
-
-    
-      <header class="post-header">
-
-        
-        
-          <h1 class="post-title" itemprop="name headline">
-                
-                <a class="post-title-link" href="/2020/05/27/hello-world/" itemprop="url">Hello World</a></h1>
-        
-
-        <div class="post-meta">
-          <span class="post-time">
-            
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              
-                <span class="post-meta-item-text">Posted on</span>
-              
-              <time title="Post created" itemprop="dateCreated datePublished" datetime="2020-05-27T20:02:04+08:00">
-                2020-05-27
-              </time>
-            
-
-            
-
-            
-          </span>
-
-          
-
-          
-            
-          
-
-          
-          
-
-          
-
-          
-
-          
-
-        </div>
-      </header>
-    
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-      
-
-      
-        
-          
-            <p>Welcome to <a href="https://hexo.io/" target="_blank" rel="noopener">Hexo</a>! This is your very first post. Check <a href="https://hexo.io/docs/" target="_blank" rel="noopener">documentation</a> for more info. If you get any problems when using Hexo, you can find the answer in <a href="https://hexo.io/docs/troubleshooting.html" target="_blank" rel="noopener">troubleshooting</a> or you can ask me on <a href="https://github.com/hexojs/hexo/issues" target="_blank" rel="noopener">GitHub</a>.</p>
-<h2 id="Quick-Start"><a href="#Quick-Start" class="headerlink" title="Quick Start"></a>Quick Start</h2><h3 id="Create-a-new-post"><a href="#Create-a-new-post" class="headerlink" title="Create a new post"></a>Create a new post</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo new <span class="string">"My New Post"</span></span><br></pre></td></tr></table></figure>
-
-<p>More info: <a href="https://hexo.io/docs/writing.html" target="_blank" rel="noopener">Writing</a></p>
-<h3 id="Run-server"><a href="#Run-server" class="headerlink" title="Run server"></a>Run server</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo server</span><br></pre></td></tr></table></figure>
-
-<p>More info: <a href="https://hexo.io/docs/server.html" target="_blank" rel="noopener">Server</a></p>
-<h3 id="Generate-static-files"><a href="#Generate-static-files" class="headerlink" title="Generate static files"></a>Generate static files</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo generate</span><br></pre></td></tr></table></figure>
-
-<p>More info: <a href="https://hexo.io/docs/generating.html" target="_blank" rel="noopener">Generating</a></p>
-<h3 id="Deploy-to-remote-sites"><a href="#Deploy-to-remote-sites" class="headerlink" title="Deploy to remote sites"></a>Deploy to remote sites</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo deploy</span><br></pre></td></tr></table></figure>
-
-<p>More info: <a href="https://hexo.io/docs/one-command-deployment.html" target="_blank" rel="noopener">Deployment</a></p>
-
+            <h2 id="Hexo-搭建博客收集如下"><a href="#Hexo-搭建博客收集如下" class="headerlink" title="Hexo 搭建博客收集如下"></a>Hexo 搭建博客收集如下</h2><h3 id="方案一：https-segmentfault-com-a-1190000017986794"><a href="#方案一：https-segmentfault-com-a-1190000017986794" class="headerlink" title="方案一：https://segmentfault.com/a/1190000017986794"></a>方案一：<a href="https://segmentfault.com/a/1190000017986794" target="_blank" rel="noopener">https://segmentfault.com/a/1190000017986794</a></h3>
           
         
       
@@ -632,7 +610,7 @@
               
                 <a href="/archives/%20%7C%7C%20archive">
               
-                  <span class="site-state-item-count">3</span>
+                  <span class="site-state-item-count">2</span>
                   <span class="site-state-item-name">posts</span>
                 </a>
               </div>
